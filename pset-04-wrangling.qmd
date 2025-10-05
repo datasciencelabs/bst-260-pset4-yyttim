@@ -186,7 +186,6 @@ cases <- cases_raw |>
     cases = parse_number(new_cases)
   ) |>
   filter(!is.na(state), !is.na(date), !is.na(cases))
-cases
 ```
 
 
