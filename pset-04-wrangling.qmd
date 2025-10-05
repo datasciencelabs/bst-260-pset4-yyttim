@@ -1,6 +1,6 @@
 ---
 title: Problem set 4
-date: 2025-10-02
+date: 2025-10-05
 format:
   pdf:
     fig-format: png
@@ -92,7 +92,7 @@ population <- population |>
     population = parse_number(population),
     state = case_when(
       state_name == "District of Columbia" ~ "DC",
-      state_name == "Puerto Rico"          ~ "PR",
+      state_name == "Puerto Rico" ~ "PR",
       TRUE ~ state.abb[match(state_name, state.name)]
     )
   ) |>
@@ -105,16 +105,14 @@ population
 ```{r}
 population |>
   filter(year %in% c(2020, 2021)) |>
-  group_by(year) |>
-  slice_max(population, n = 10, with_ties = FALSE) |>
-  ungroup() |>
-  ggplot(aes(x = reorder(state_name, -population), y = population)) +
+  ggplot(aes(x = reorder(state_name, population), y = population)) +
   geom_col() +
   coord_flip() +
-  facet_wrap(~ year) +
-  scale_y_continuous(labels = scales::label_comma()) +
-  labs(x = "States", y = "Population", title = "Top 10 states by population") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  facet_wrap(~ year, scales = "free_y") +
+  scale_y_continuous(labels = \(x) format(x, big.mark = ",", scientific = FALSE)) +
+  labs(x = "States", y = "Population", title = "State populations (2020 & 2021)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 5))
 ```
 
 
@@ -132,11 +130,10 @@ points to a JSON file that lists the states in the 10 Public Health Service (PHS
 library(jsonlite)
 library(purrr)
 regions <- fromJSON(url) |>
-  as_tibble() |>
   unnest(states) |>
   transmute(
     state_name  = states,
-    region      = as.integer(region),
+    region = as.integer(region),
     region_name = region_name
   ) |>
   mutate(
@@ -145,7 +142,8 @@ regions <- fromJSON(url) |>
       "NY/NJ & Territories",
       region_name
     )
-  )
+  ) |>
+  filter(state_name %in% c(state.name, "District of Columbia", "Puerto Rico"))
 regions
 ```
 
@@ -170,6 +168,8 @@ cases_raw
 
 We see exactly 1,000 rows. We should be seeing over $52 \times 3$ rows per state.
 
+The API defaults to only 1,000 records per request, so the response is truncated and doesn’t include all data.
+
 11. The reason you see exactly 1,000 rows is because CDC has a default limit. You can change this limit by adding `$limit=10000000000` to the request. Rewrite the previous request to ensure that you receive all the data. Then wrangle the resulting data frame to produce a data frame with columns `state`, `date` (should be the end date) and `cases`. Make sure the cases are numeric and the dates are in `Date` ISO-8601 format.
 
 ```{r}
@@ -178,13 +178,14 @@ cases_raw <- request(api) |>
   req_url_query("$limit" = 10000000000) |>
   req_perform() |>
   resp_body_json(simplifyDataFrame = TRUE)
-cases <- as_tibble(cases_raw) |>
+
+cases <- cases_raw |>
   transmute(
-    state_name = state,
+    state = state,
     date  = ymd_hms(end_date, quiet = TRUE) |> as_date(),
     cases = parse_number(new_cases)
   ) |>
-  filter(!is.na(date), !is.na(cases))
+  filter(!is.na(state), !is.na(date), !is.na(cases))
 cases
 ```
 
@@ -194,7 +195,7 @@ cases
 ```{r}
 cases |>
   transmute(
-    state = state_name,
+    state = state,
     date  = as.Date(date),
     cases = cases
   ) |>
@@ -205,18 +206,18 @@ cases |>
       select(state, region_name, population),
     by = "state"
   ) |>
+  filter(!is.na(population)) |>
   mutate(cases_per_100k = 1e5 * cases / population) |>
   filter(format(date, "%Y") %in% c("2020", "2021")) |>
   ggplot(aes(x = date, y = cases_per_100k, group = state)) +
-  geom_line(alpha = 0.4) +
+  geom_line(alpha = 0.5) +
   facet_wrap(~ region_name, scales = "free_y") +
   labs(
     x = "Date",
     y = "Cases per 100,000",
-    title = "COVID-19 cases per 100k by state (2020–2021)"
+    title = "COVID-19 cases per 100,000 by state (2020 - 2021)"
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
 ```
 
 13. The dates in the `cases` dataset are stored as character strings. Use the **lubridate** package to properly parse the `date` column, then create a summary table showing the total COVID-19 cases by month and year for 2020 and 2021. The table should have columns for year, month (as month name), and total cases across all states. Order by year and month. Use the **knitr** package and `kable()` function to display the results as a formatted table.
@@ -225,16 +226,15 @@ cases |>
 library(lubridate)
 library(knitr)
 cases |>
-  mutate(date = ymd(as.character(date))) |>
-  filter(year(date) %in% c(2020, 2021)) |>
   mutate(
     year  = year(date),
     month = month(date, label = TRUE, abbr = FALSE)
   ) |>
+  filter(year %in% c(2020, 2021)) |>
   group_by(year, month) |>
   summarise(total_cases = sum(cases, na.rm = TRUE), .groups = "drop") |>
   arrange(year, month) |>
-  kable()
+  kable(caption = "Total COVID-19 Cases by Month and Year (2020 - 2021)")
 ```
 
 14. The following URL provides additional COVID-19 data from the CDC in JSON format:
@@ -273,7 +273,7 @@ deaths |>
   geom_col() +
   coord_flip() +
   labs(
-    x = NULL,
+    x = "States",
     y = "Total COVID-19 deaths",
     title = "Top 10 states by total COVID-19 deaths"
   )
