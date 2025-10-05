@@ -112,7 +112,7 @@ population |>
   scale_y_continuous(labels = \(x) format(x, big.mark = ",", scientific = FALSE)) +
   labs(x = "States", y = "Population", title = "State populations (2020 & 2021)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.text.y = element_text(size = 5))
+        axis.text.y = element_text(size = 4))
 ```
 
 
@@ -163,7 +163,6 @@ api <- "https://data.cdc.gov/resource/pwn4-m3yp.json"
 cases_raw <- request(api) |>
   req_perform() |>
   resp_body_json(simplifyDataFrame = TRUE)
-cases_raw
 ```
 
 We see exactly 1,000 rows. We should be seeing over $52 \times 3$ rows per state.
